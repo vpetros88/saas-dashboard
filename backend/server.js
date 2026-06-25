@@ -16,6 +16,8 @@ const HOME = os.homedir()
 const DEV_DIR = process.env.DEV_DIR || path.join(HOME, 'Projects_dev/artificial-notes')
 const PROD_DIR = process.env.PROD_DIR || path.join(HOME, 'Projects/artificial-notes')
 const SCRIPTS_DIR = path.join(DEV_DIR, 'scripts')
+const AISCHOOLING_DIR = process.env.AISCHOOLING_DIR || path.join(HOME, 'Projects_dev/aischooling')
+const AISCHOOLING_SCRIPTS = path.join(AISCHOOLING_DIR, 'scripts')
 
 // SSE clients for log streaming
 const sseClients = new Set()
@@ -93,10 +95,11 @@ function runScript(scriptPath, args = [], source = 'script') {
 
 // GET /api/status — full status snapshot
 app.get('/api/status', async (req, res) => {
-  const [devBackend, devFrontend, prodApp] = await Promise.all([
+  const [devBackend, devFrontend, prodApp, aischooling] = await Promise.all([
     isPortListening(8001),
     isPortListening(5174),
     isPortListening(8000),
+    isPortListening(3001),
   ])
 
   const launchd = await getLaunchdStatus()
@@ -115,6 +118,10 @@ app.get('/api/status', async (req, res) => {
       app: { port: 8000, running: prodApp },
       launchd: launchd || null,
       url: process.env.PROD_URL || 'https://artificialnotes.app',
+    },
+    aischooling: {
+      app: { port: 3001, running: aischooling },
+      url: 'http://localhost:3001',
     },
   })
 })
@@ -188,12 +195,48 @@ app.post('/api/prod/restart', async (req, res) => {
   }
 })
 
-// GET /api/health — quick health check hitting the prod API
+// ── aischooling routes ───────────────────────────────────────────────────────
+
+app.post('/api/aischooling/start', async (req, res) => {
+  try {
+    await execAsync(`launchctl start com.aischooling.app`)
+    await new Promise((r) => setTimeout(r, 2000))
+    const running = await isPortListening(3001)
+    res.json({ ok: true, running })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) })
+  }
+})
+
+app.post('/api/aischooling/stop', async (req, res) => {
+  try {
+    await execAsync(`launchctl stop com.aischooling.app`)
+    res.json({ ok: true })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) })
+  }
+})
+
+app.post('/api/aischooling/restart', async (req, res) => {
+  try {
+    const { stdout } = await execAsync('id -u')
+    const uid = stdout.trim()
+    await execAsync(`launchctl kickstart -k gui/${uid}/com.aischooling.app`)
+    await new Promise((r) => setTimeout(r, 3000))
+    const running = await isPortListening(3001)
+    res.json({ ok: true, running })
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) })
+  }
+})
+
+// GET /api/health — quick health check hitting all services
 app.get('/api/health', async (req, res) => {
   const checks = await Promise.all([
     isPortListening(8000).then((up) => ({ service: 'prod-app', port: 8000, up })),
     isPortListening(8001).then((up) => ({ service: 'dev-backend', port: 8001, up })),
     isPortListening(5174).then((up) => ({ service: 'dev-frontend', port: 5174, up })),
+    isPortListening(3001).then((up) => ({ service: 'aischooling', port: 3001, up })),
   ])
 
   // Try hitting the actual prod /health endpoint

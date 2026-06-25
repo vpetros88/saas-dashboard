@@ -29,8 +29,13 @@ function StatusRow({ label, up, port }) {
 
 function EnvCard({ title, env, data, onAction }) {
   const isProd = env === 'prod'
+  const isAi = env === 'ai'
   const devRunning = data?.backend?.running || data?.frontend?.running
   const devFullyRunning = data?.backend?.running && data?.frontend?.running
+  const singleRunning = data?.app?.running
+
+  const badgeClass = singleRunning ? 'badge-green' : 'badge-gray'
+  const badgeText = singleRunning ? 'online' : 'stopped'
 
   return (
     <div className="card">
@@ -40,6 +45,8 @@ function EnvCard({ title, env, data, onAction }) {
           <span className={`badge ${data?.app?.running ? 'badge-green' : 'badge-red'}`}>
             {data?.app?.running ? 'online' : 'offline'}
           </span>
+        ) : isAi ? (
+          <span className={`badge ${badgeClass}`}>{badgeText}</span>
         ) : (
           <span className={`badge ${devFullyRunning ? 'badge-green' : devRunning ? 'badge-yellow' : 'badge-gray'}`}>
             {devFullyRunning ? 'running' : devRunning ? 'partial' : 'stopped'}
@@ -50,6 +57,8 @@ function EnvCard({ title, env, data, onAction }) {
       <div className="status-list">
         {isProd ? (
           <StatusRow label="App" port={8000} up={data?.app?.running} />
+        ) : isAi ? (
+          <StatusRow label="App" port={3001} up={data?.app?.running} />
         ) : (
           <>
             <StatusRow label="Backend"  port={8001} up={data?.backend?.running}  />
@@ -59,7 +68,7 @@ function EnvCard({ title, env, data, onAction }) {
       </div>
 
       <div className="btn-row">
-        {!isProd && (
+        {!isProd && !isAi && (
           <>
             <button
               className="btn-success"
@@ -72,6 +81,31 @@ function EnvCard({ title, env, data, onAction }) {
               className="btn-danger"
               onClick={() => onAction('dev/stop')}
               disabled={!devRunning}
+            >
+              ■ Stop
+            </button>
+          </>
+        )}
+
+        {isAi && (
+          <>
+            <button
+              className="btn-success"
+              onClick={() => onAction('aischooling/start')}
+              disabled={singleRunning}
+            >
+              ▶ Start
+            </button>
+            <button
+              className="btn-outline"
+              onClick={() => onAction('aischooling/restart')}
+            >
+              ↺ Restart
+            </button>
+            <button
+              className="btn-danger"
+              onClick={() => onAction('aischooling/stop')}
+              disabled={!singleRunning}
             >
               ■ Stop
             </button>
@@ -98,7 +132,7 @@ function EnvCard({ title, env, data, onAction }) {
 
         <a
           className="btn-link"
-          href={isProd ? (data?.url || 'https://artificialnotes.app') : 'http://localhost:5174'}
+          href={isProd ? (data?.url || 'https://artificialnotes.app') : isAi ? 'http://localhost:3001' : 'http://localhost:5174'}
           target="_blank"
           rel="noreferrer"
         >
@@ -238,6 +272,7 @@ export default function App() {
       <div className="grid">
         <EnvCard title="Dev" env="dev" data={status?.dev} onAction={handleAction} />
         <EnvCard title="Production" env="prod" data={status?.prod} onAction={handleAction} />
+        <EnvCard title="aischooling" env="ai" data={status?.aischooling} onAction={handleAction} />
       </div>
 
       <LogPanel logs={logs} onClear={() => setLogs([])} />
